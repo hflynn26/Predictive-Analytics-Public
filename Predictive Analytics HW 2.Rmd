@@ -1,0 +1,1675 @@
+---
+title: "Predictive Analytics HW 2"
+author: "Harrison Flynn"
+date: "4/16/2022"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+## R Markdown
+
+This is an R Markdown document. Markdown is a simple formatting syntax for authoring HTML, PDF, and MS Word documents. For more details on using R Markdown see <http://rmarkdown.rstudio.com>.
+
+When you click the **Knit** button a document will be generated that includes both content as well as the output of any embedded R code chunks within the document. You can embed an R code chunk like this:
+
+```{r cars}
+summary(cars)
+```
+
+## Including Plots
+
+You can also embed plots, for example:
+
+```{r pressure, echo=FALSE}
+plot(pressure)
+```
+
+Note that the `echo = FALSE` parameter was added to the code chunk to prevent printing of the R code that generated the plot.
+
+library(dplyr)
+library(tidyr)
+library(forecast)
+library(ggplot2)
+library(fpp3)
+library(fpp2)
+library(fpp)
+library(fma)
+library(readxl)
+library(tsibble)
+library(feasts)
+library(seasonal)
+library(psych)
+library(MASS)
+library(fitdistrplus)
+library(pscl)
+library(boot)
+library(fGarch)
+library(pROC)
+library(censReg)
+library(tscount)
+library(randomForest)
+library(mice)
+library(caret)
+library(tensorflow)
+library(keras)
+library(Amelia)
+library(e1071)
+library(xgboost)
+library(AnalyzeFMRI)
+library(EBImage)
+library(ResourceSelection)
+library(adabag)
+library(neuralnet)
+library(class)
+library(simmer)
+library(simmer.plot)
+library(parallel)
+library(rugarch)
+library(dplyr)
+library(generics)
+
+
+install.packages('rminer')
+library(rminer)
+
+install.packages('report')
+library(report)
+
+install.packages('fma')
+library(fma)
+
+#Chapter 8 Question 1
+
+```{r}
+
+pigs <- aus_livestock %>%
+  filter(Animal == "Pigs", State == "Victoria")
+
+pigsplot <- pigs %>%
+  autoplot(Count)
+
+pigsplot
+
+```
+
+```{r}
+myts <- ts(pigs$Count)
+
+ets <- ets(myts, model = "ANN")
+ets
+
+```
+
+```{block, type = 'written answer'}
+
+The optimal values are 0.3221 and 100646.6
+
+```
+
+
+```{r}
+
+etsforecast1 <- forecast(ets, h =4)
+etsforecast1
+
+```
+
+```{r}
+
+s<-sd((ses(myts, h=4))$residuals)
+lower <- ses(myts,h=4)$mean[1]-1.96*s
+upper <- ses(myts,h=4)$mean[1]+1.96*s
+
+lower
+```
+
+```{r}
+
+upper
+
+```
+
+
+```{block, type = 'written answer'}
+
+The interval predicted by R's forecast model was larger than the interval I calculated by hand.
+
+```
+
+#Chapter 8 Question 2
+
+```{r}
+
+SES <- function(y, alpha, l0){
+  y_hat <- l0
+  for(index in 1:length(y)){
+   y_hat <- alpha*y[index] + (1 - alpha)*y_hat 
+  }
+  cat("Forecast of next observation by SES function: ",
+      as.character(y_hat),
+      sep = "\n")
+}
+
+alpha <- etsforecast1$model$par[1]
+l0 <- etsforecast1$model$par[2]
+
+SES(myts, alpha = alpha, l0 = l0)
+
+
+```
+
+#Chapter 8 Question 3
+```{r}
+
+SES <- function(pars = c(alpha, l0), y){
+  error <- 0
+  SSE <- 0
+  alpha <- pars[1]
+  l0 <- pars[2]
+  y_hat <- l0
+  
+  for(index in 1:length(y)){
+    error <- y[index] - y_hat
+    SSE <- SSE + error^2
+    
+    y_hat <- alpha*y[index] + (1 - alpha)*y_hat 
+  }
+  
+  return(SSE)
+}
+
+opt.SES.pigs <- optim(par = c(0.5, myts[1]), y = myts, fn = SES)
+opt.SES.pigs
+```
+
+```{r}
+
+SES <- function(init_pars, data){
+  fc_next <- 0
+  
+SSE <- function(pars, data){
+    error <- 0
+    SSE <- 0
+    alpha <- pars[1]
+    l0 <- pars[2]
+    y_hat <- l0
+    
+    for(index in 1:length(data)){
+      error <- data[index] - y_hat
+      SSE <- SSE + error^2
+      
+      y_hat <- alpha*data[index] + (1 - alpha)*y_hat 
+    }
+    fc_next <<- y_hat
+    return(SSE)
+  }
+
+
+optim.pars <- optim(par = init_pars, data = data, fn = SSE)
+
+return(list(
+    Next_observation_forecast = fc_next,
+    alpha = optim_pars$par[1],
+    l0 = optim_pars$par[2]
+    ))
+}
+```
+
+
+#Chapter 8 Question 5
+```{r}
+
+austria <- global_economy %>%
+  filter(Code == 'AUT')
+austria
+
+```
+```{r}
+
+austria %>%
+  autoplot(Exports)
+
+```
+
+```{r}
+
+myts2 <- ts(austria$Exports)
+
+ets2 <- ets(myts2, model = "ANN")
+ets2
+
+```
+```{r}
+
+etsforecast2 <- forecast(ets2)
+etsforecast2
+
+```
+```{r}
+
+acc <- accuracy(etsforecast2)
+acc
+
+```
+
+```{r}
+
+ets3 <- ets(myts2, "AAN")
+ets3
+
+```
+
+```{r}
+
+acc2<-accuracy(ets3)
+acc2
+
+```
+
+```{block, type = "written answer"}
+
+The RMSE of the ANN model was 1.93, which is slightly worse than the RMSE of the AAN model of 1.84
+
+```
+
+```{r}
+
+etsforecast3 <-forecast(ets3, h = 10)
+etsforecast3
+
+```
+
+
+```{block, type = "written answer"}
+
+Just looking at the forecasts themselves, the AAN model looks superior to the ANN model. It also has a lower RMSE and the point forecasts look far better than the ANN model. 
+
+```
+
+```{r}
+
+comp <- austria %>%
+  model(
+    ANN = ETS(Exports ~ error('A') + trend('N') + season('N')),
+    AAN = ETS(Exports ~ error('A') + trend('A') + season('N'))
+  )
+
+accuracy(comp)
+```
+
+
+
+
+
+
+```{r}
+
+sd <- comp %>%
+  dplyr::select(Country, AAN) %>%
+  accuracy() %>%
+  transmute(Country, standardDeviation = RMSE)
+
+```
+
+
+#Chapter 8 Question 6
+```{r}
+
+options(scipen = 999)
+china <- global_economy %>%
+  filter(Country == 'China')
+
+china %>% 
+  autoplot(GDP)
+```
+```{r}
+
+lambda <- china%>%
+  features(GDP, features = guerrero)%>%
+  pull(lambda_guerrero)
+
+china.model.comps <- china%>%
+  model(ETS = ETS(GDP),
+        ETSBoxCox = ETS(box_cox(GDP,lambda)),
+        ETSdamped = ETS(GDP~trend('Ad',phi = 0.9)),
+        ETSLog = ETS(log(GDP)))
+
+china.model.comps%>%
+  forecast(h =25)%>%
+  autoplot(china, level = NULL)
+```
+#Chapter 8 Question 7
+```{r}
+
+aus_production%>%
+  autoplot(Gas)
+
+```
+```{r}
+
+ets.aus <- aus_production %>%
+  model(fit = ETS(Gas))
+
+accuracy(ets.aus)
+
+```
+```{r}
+
+ets.aus%>%
+  forecast(h=10)%>%
+  autoplot(aus_production)
+
+
+```
+```{block, type = "written answer"}
+
+Multiplicative seasonality is necessary here because the data is seasonal, but it is trending upward as time goes on.
+
+```
+
+```{r}
+
+damped.aus <- aus_production%>%
+  model(fit = ETS(Gas~trend('Ad', phi = 0.9)))
+
+damped.aus%>%
+  forecast(h=10)%>%
+  autoplot(aus_production)
+
+```
+```{block, type = "written answer"}
+
+The damped forecast and the ETS forecast seem very similar.
+
+```
+
+#Chapter 8 Question 8
+```{r}
+
+set.seed(12345678)
+myseries <- aus_retail %>%
+  filter(`Series ID` == sample(aus_retail$`Series ID`,1))
+
+myseries %>%
+  autoplot(Turnover)
+```
+```{r}
+
+Mulitplicative seasonality is necessary because the data is seasonal and is trending upwards over time.
+
+```
+
+```{r}
+
+hw <- myseries%>%
+  model('HW Multiplicative' = ETS(Turnover ~ error('M')+trend ('A')+season('M')),
+        'HW Damped' = ETS(Turnover ~ error('M')+trend('Ad')+season('M'))
+        )
+
+hw.forecast <- hw %>%
+  forecast(h=10)
+
+hw.forecast%>%
+  autoplot(myseries, level = NULL)
+```
+```{r}
+
+accuracy(hw)%>%
+  dplyr::select('.model', 'RMSE')
+
+```
+```{block, type = "written answer"}
+
+The RMSE for both models are almost identical, but the Multiplicative is slightly lower. 
+
+```
+
+```{r}
+
+hw%>%
+  dplyr::select('HW Multiplicative')%>%
+  gg_tsresiduals()
+
+```
+```{r}
+
+myseries.train <-myseries%>%
+  filter(year(Month)<2011)
+
+lambda <- 0.24
+
+ets.retail <- myseries.train%>%
+  model(SNAIVE(box_cox(Turnover,lambda)~drift()))
+
+ets.retail%>%
+  gg_tsresiduals()
+```
+```{r}
+
+retail.comp <- anti_join(myseries, myseries.train, by = c('State', 'Industry', 'Series ID', 'Month', 'Turnover'))
+
+retail.fc <- ets.retail %>%
+  forecast(retail.comp)
+
+retail.fc%>%
+  autoplot(myseries, level = NULL)
+
+
+```
+
+#Chapter 8 Question 9
+```{r}
+
+lambda <- myseries.train%>%
+  features(Turnover, features = guerrero)%>%
+  pull(lambda_guerrero)
+
+boxcox <- myseries.train%>%
+  mutate(bc = box_cox(Turnover, lambda))
+
+boxcox.model<- boxcox %>%
+  model('STL Box Cox' = STL(bc ~season(window = 'periodic'),robust = TRUE),
+        'ETS Box Cox' = ETS(bc))
+
+HW.muplt <- boxcox %>%
+  model('HW Multiplicative' = ETS (Turnover~error('M')+trend('A')+season('M')))
+
+accuracy(boxcox.model)
+```
+```{r}
+accuracy(HW.muplt)
+
+```
+
+```{block, type = "written answer"}
+
+The RMSE values for the STL and Box COx models are far lower than for that of the Holt Winters model.
+
+```
+
+
+#Chapter 8 Question 10
+
+```{r}
+
+aus.trips <- tourism%>%
+  summarise(Trips = sum(Trips))
+
+aus.trips%>%
+  autoplot(Trips)
+  
+
+```
+```{r}
+
+stl<- aus.trips%>%
+  model(STL(Trips))%>%
+  components()
+
+stl%>%
+  as_tsibble()%>%
+  autoplot(season_adjust)
+
+```
+
+```{r}
+
+trips.fc<- aus.trips%>%
+  model(decomposition_model(STL(Trips),
+                          ETS(season_adjust~error("A")+trend("Ad")+season("N"))))%>%
+  forecast(h ="2 years")
+
+trips.fc%>%
+  autoplot(aus.trips)
+
+```
+```{r}
+
+trips.fc2<- aus.trips%>%
+  model(decomposition_model(STL(Trips),
+                          ETS(season_adjust~error("A")+trend("A")+season("N"))))%>%
+  forecast(h ="2 years")
+
+trips.fc2%>%
+  autoplot(aus.trips)
+
+```
+```{r}
+
+trips.fc3 <- aus.trips%>%
+  model(ETS(Trips))%>%
+  forecast(h = "2 years")
+
+trips.fc3%>%
+  autoplot(aus.trips)
+
+```
+
+```{r}
+
+comp.trips <- aus.trips%>%
+  model(STL1 = decomposition_model(STL(Trips), ETS(season_adjust~error('A')+trend('Ad')+season('N'))),
+        STL2 = decomposition_model(STL(Trips), ETS(season_adjust~error('A')+trend('A')+season('N'))),
+        ETS = ETS(Trips))
+
+accuracy(comp.trips)
+
+```
+```{block, type = "written answer"}
+
+The STL models perform better in terms of RMSE than the ETS model.
+
+```
+
+
+```{r}
+
+comp.trips%>%
+  forecast(h = "2 years")%>%
+  autoplot(aus.trips, level = NULL)
+
+```
+
+```{r}
+resid <- comp.trips%>%
+  dplyr::select(STL2)
+
+resid%>%
+  gg_tsresiduals()
+
+```
+
+#Chapter 8 Question 11
+```{r}
+
+arrivals <- aus_arrivals%>%
+  filter(Origin =='NZ')
+
+autoplot(arrivals, Arrivals)
+
+```
+
+```{block, type = "written answer"}
+
+The data is seasonal and trending upward.
+
+```
+
+```{r}
+
+training <- arrivals %>%
+  slice(1:(nrow(arrivals)-(4*2)))
+
+arriv.fc <- training %>%
+  model(
+    ETS(Arrivals ~ error("M")+trend("A")+season("M")))%>%
+  forecast(h = "2 years")
+
+arriv.fc%>%
+  autoplot(training, level = NULL)+
+  autolayer(arrivals, Arrivals)
+
+```
+
+```{block, type = "written answer"}
+Multiplicative seasonality is best used when the data is seasonal and trending upwards. In this case the data is doing just that.
+
+```
+
+```{r}
+
+arriv.comp<- anti_join(arrivals, training, by = c("Quarter", "Origin", "Arrivals"))
+
+arriv.fcs <- training%>%
+  model( ETS = ETS(Arrivals), 
+         LOG = ETS(log(Arrivals)~error("A")+trend("A")+season("A")),
+         NAIVE = SNAIVE(Arrivals),
+         STLLOG = decomposition_model(STL(log(Arrivals)), ETS(season_adjust)))
+
+fcs <- arriv.fcs %>%
+  forecast(h = "2 years")
+
+fcs%>%
+  autoplot(level = NULL)+
+  autolayer(arriv.comp, Arrivals)
+
+```
+```{r}
+
+fcs%>%
+  accuracy(arrivals)
+
+```
+```{block, type = "written answer"}
+
+Based off of RMSE, the ETS model is the best one.
+
+```
+
+```{r}
+
+ets.best <- arriv.fcs%>%
+  dplyr::select('ETS')
+
+ets.best%>%
+  gg_tsresiduals()
+
+```
+```{r}
+augment(ets.best)%>%
+  features(.resid, ljung_box)
+
+```
+
+```{block, type = "written answer"}
+
+The ETS model does pass the residuals test looking at the plots and the ljung box test.
+
+```
+
+
+```{r}
+
+cv <- arrivals%>%
+  slice(1:(n()-3))%>%
+  stretch_tsibble(.init = 36, .step =3)
+
+cv%>%
+  model(ETS = ETS(Arrivals), 
+         LOG = ETS(log(Arrivals)~error("A")+trend("A")+season("A")),
+         NAIVE = SNAIVE(Arrivals),
+         STLLOG = decomposition_model(STL(log(Arrivals)), ETS(season_adjust)))%>%
+  forecast(h=3)%>%
+  accuracy(arrivals)
+
+```
+```{block, type = "written answer"}
+
+The log model perfomed the best based on RMSE.
+
+```
+
+#Chapter 8 Question 12
+```{r}
+
+cement <- aus_production %>%
+  slice(1:(n()-4))%>%
+  stretch_tsibble(.init = 5*4, .step =1)
+
+cement.fc <- cement%>%
+  model(ETS = ETS(Cement),
+        NAIVE =SNAIVE(Cement))
+
+```
+
+```{r}
+
+cement.fc %>%
+  group_by(.id, .model)%>%
+  mutate(h = row_number())%>%
+  accuracy(aus_production, by = c (".model","h"))
+
+```
+
+#Chapter 8 Question 13
+```{r}
+
+fc.beer <- aus_production%>%
+  slice(1:(nrow(aus_production)-12))%>%
+  model('ETS' = ETS(Beer),
+        'NAIVE' = SNAIVE(Beer),
+        'STL' = decomposition_model(STL(log(Beer)),
+                                    ETS(season_adjust)))%>%
+  forecast(h="3 years")
+
+fc.beer%>%
+  autoplot(aus_production)
+
+```
+
+```{r}
+
+fc.beer%>%
+  accuracy(aus_production)
+
+```
+```{block, type = "written answer"}
+
+THe best model here is the ETS one based on RMSE
+
+```
+
+
+```{r}
+
+bricks<- aus_production%>%
+  filter(!is.na(Bricks))
+bricks<- na.omit(bricks)
+
+fc.bricks <- bricks%>%
+  slice(1:(nrow(aus_production)-12))%>%
+  model('ETS' = ETS(Bricks),
+        'NAIVE' = SNAIVE(Bricks),
+        'STL' = decomposition_model(STL(log(Bricks)),
+                                    ETS(season_adjust)))%>%
+  forecast(h="3 years")
+
+fc.bricks%>%
+  autoplot(aus_production)
+
+```
+
+```{r}
+
+fc.bricks %>%
+  accuracy(bricks)
+
+```
+
+```{r}
+
+
+subsidies <- PBS %>%
+  filter(ATC2 %in% c("A10", "H02"))%>%
+  group_by(ATC2)%>%
+  summarise(Cost = sum(Cost))
+
+subsidies %>%
+  autoplot(Cost)
+
+```
+```{r}
+
+diabetes <- subsidies %>%
+  filter(ATC2 %in% "A10")
+
+lambda1 <- diabetes %>%
+  features(Cost, features = guerrero)%>%
+  pull(lambda_guerrero)
+
+diabetes.fc <- diabetes%>%
+  filter (Month < max(Month) -35) %>%
+  model('ETS' = ETS(Cost),
+        'NAIVE' = SNAIVE(Cost),
+        'STL' = decomposition_model(STL(box_cox(log(Cost), lambda1)),
+                                    ETS(season_adjust))
+  )
+
+diabetes.fc <- diabetes.fc%>%
+  forecast(h = "3 years")
+
+cortico <- subsidies %>%
+  filter(ATC2 %in% "H02")
+
+lambda2 <- cortico %>%
+  features(Cost, features = guerrero)%>%
+  pull(lambda_guerrero)
+
+cortico.fc <- cortico%>%
+  filter (Month < max(Month) -35) %>%
+  model('ETS' = ETS(Cost),
+        'NAIVE' = SNAIVE(Cost),
+        'STL' = decomposition_model(STL(box_cox(log(Cost), lambda1)),
+                                    ETS(season_adjust))
+  )
+
+cortico.fc <- cortico.fc%>%
+  forecast(h = "3 years")
+
+tot.fc <- bind_rows(diabetes.fc, cortico.fc)
+tot.fc %>%
+  autoplot(subsidies)
+```
+```{r}
+
+tot.fc %>%
+  accuracy(subsidies)
+
+```
+
+```{block, type = "written answer"}
+
+
+The best model was the STL model for the corticosteroids. The best model for diabetes was also the STL based on RMSE.
+
+```
+
+```{r}
+
+food <- aus_retail %>%
+  filter(Industry == "Food retailing")%>%
+  summarise(Turnover = sum(Turnover))
+autoplot(food, Turnover)
+  
+
+```
+
+```{r}
+
+lambda <- food %>%
+  features(Turnover, features = guerrero)%>%
+  pull(lambda_guerrero)
+
+food.fc <- food%>%
+  filter (Month < max(Month) -35) %>%
+  model('ETS' = ETS(Turnover),
+        'NAIVE' = SNAIVE(Turnover),
+        'STL' = decomposition_model(STL(box_cox(log(Turnover), lambda1)),
+                                    ETS(season_adjust))
+  )
+
+food.fc <- food.fc%>%
+  forecast(h = "3 years")
+
+food.fc%>%
+  autoplot(food)
+
+```
+
+```{r}
+
+food.fc%>%
+  accuracy(food)
+
+```
+```{block, type = "written answer"}
+
+The ETS model is the best in this case, as the RMSE is the lowest.
+````
+
+#Chapter 8 Question 14
+```{r}
+
+trips <- tourism%>%
+  summarise(Trips = sum(Trips))
+
+trips.fc <- trips%>%
+  model(ETS(Trips))
+
+trips.fc %>%
+  forecast()%>%
+  autoplot(trips)
+
+```
+```{r}
+
+gafa_stock %>%
+  autoplot(Close)
+
+```
+
+```{r}
+
+gafa <- gafa_stock%>%
+  group_by(Symbol)%>%
+  mutate(trading_day = row_number())%>%
+  ungroup%>%
+  as_tsibble(index = trading_day, regular = TRUE)
+
+gafa.fc<- gafa%>%
+  model(ETS(Close))
+
+gafa.fc %>%
+  forecast(h=10)%>%
+  autoplot(gafa)
+
+```
+
+```{r}
+
+pelt %>%
+  model(ETS(Lynx))%>%
+  forecast(h=10)%>%
+  autoplot(pelt)
+```
+
+```{block, type = "written answer"}
+
+ETS does not work here because the patterns of the data don't move over any sort of fixed time period. The data here is cyclical and ETS will not be very effective in forecasting here. 
+
+```
+
+
+#Chapter 8 Question 15
+```{r}
+usdeaths.ets <- ets(usdeaths, model = "MAM")
+usdeaths.fc <- forecast(usdeaths.ets, h =1)
+usdeaths.hw <- hw(usdeaths, seasonal = 'multiplicative',h=1)
+usdeaths.fc$mean
+
+```
+
+```{r}
+usdeaths.hw$mean
+```
+
+```{block, type = "written answer"}
+
+THe averages for the ETS MAM and the HW models are virtually identical.
+
+```
+
+
+#Chapter 8 Question 16
+```{r}
+
+ibmclose.ets <- ets(ibmclose, model = "ANN")
+ibmclose.fc <- forecast(ibmclose.ets,1)
+ibmclose.fc
+```
+```{r}
+
+ci <- 7.2637*(1+(0.9999^2)*(2-1))
+ibmclose.fc$mean 
+
+```
+
+```{r}
+
+ibmclose.fc$mean -ci
+
+```
+
+```{r}
+
+ibmclose.fc$lower[1, '95%']
+
+```
+
+```{block, type = "written answer"}
+
+By calculating the lower end of the confidence interval by hand and then doing it with R, it is clear that the equation shows the forecast variance for ETS (ANN)
+
+
+```
+
+#Chapter 9 Question 1
+```{block, type = "written answer"}
+The ACF's for all three charts are within the dotted lines meaning they are statistically significant. Therefore they are white noise. The lines were created using the (plus/minus) 1.96 figure, meaning the critical values will be at different distances from the mean. The autocorrelations are different for each graph because there is a different quantity of values for each graph. When there is more data it is less likely that the randomly generated values will appear to be correlated. 
+
+```
+
+#Chapter 9 Question 2
+```{r}
+
+gafa_stock%>%
+  filter(Symbol == "AMZN") %>%
+  gg_tsdisplay(Close, plot_type = 'partial')
+
+```
+
+```{block, type = "written answer"}
+The AMazon stock price is not stationary because it is trending upward. Additionally, the ACF is slowly trending downwards which also indicates that it is not stationary. THE PACF also shows the data is non-stationary because the first lag is very high while the others are all smaller relatively. 
+
+```
+
+#Chapter 9 Question 3
+
+```{r}
+global_economy %>%
+  filter(Country == "Turkey") %>%
+  gg_tsdisplay(GDP, plot_type='partial')
+```
+
+```{r}
+lambda <- global_economy %>%
+  filter(Country == "Turkey") %>%
+  features(GDP, features = guerrero) %>%
+  pull(lambda_guerrero)
+
+
+global_economy %>%
+  filter(Country == "Turkey") %>%
+  features(box_cox(GDP,lambda), unitroot_ndiffs)
+
+```
+
+```{r}
+
+global_economy%>%
+  filter(Country == "Turkey")%>%
+  gg_tsdisplay(difference(box_cox(GDP, lambda)),plot_type = 'partial')
+
+
+```
+```{r}
+
+aus_accommodation%>%
+  filter(State == "Tasmania")%>%
+  gg_tsdisplay(Takings, plot_type = 'partial')
+
+```
+```{r}
+
+lambda <- aus_accommodation %>%
+  filter(State == "Tasmania") %>%
+  features(Takings, features = guerrero) %>%
+  pull(lambda_guerrero)
+
+aus_accommodation%>%
+  filter(State =="Tasmania")%>%
+  features(box_cox(Takings,lambda),unitroot_nsdiffs)
+
+```
+
+```{r}
+
+aus_accommodation%>%
+  filter(State =="Tasmania")%>%
+  gg_tsdisplay(difference(box_cox(Takings, lambda),4),plot_type = 'partial')
+
+```
+```{r}
+souvenirs%>%
+  gg_tsdisplay(Sales, plot_type = 'partial')
+
+
+```
+```{r}
+lambda <- souvenirs %>%
+  features(Sales, features = guerrero)%>%
+  pull(lambda_guerrero)
+
+souvenirs%>%
+  features(box_cox(Sales, lambda), unitroot_nsdiffs)
+```
+
+```{r}
+souvenirs%>%
+  gg_tsdisplay(difference(box_cox(Sales,lambda),12),plot_type = 'partial')
+```
+#Chapter 9 Question 4
+```{block, type = "written answer"}
+
+I applied a box cox transformation using a lambda of 12 in order to make the data more stationary.
+
+```
+
+
+#Chapter 9 Question 5
+```{r}
+
+set.seed(12345678)
+myseries <- aus_retail %>%
+  filter(`Series ID` == sample(aus_retail$`Series ID`,1))
+
+```
+
+```{r}
+
+myseries%>%
+  gg_tsdisplay(Turnover, plot_type = 'partial', lag = 36)
+
+```
+
+```{r}
+
+lambda <- myseries%>%
+  features(Turnover, features = guerrero)%>%
+  pull(lambda_guerrero)
+
+myseries%>%
+  features(box_cox(Turnover,lambda),unitroot_nsdiffs)
+
+```
+
+
+```{r}
+myseries%>%
+  gg_tsdisplay(difference(box_cox(Turnover,lambda),12),plot_type = 'partial',lag=36)
+
+```
+
+#Chapter 9 Question 6
+```{r}
+
+y <- numeric(100)
+e <- rnorm(100)
+for(i in 2:100)
+  y[i] <- 0.6*y[i-1] + e[i]
+sim <- tsibble(idx = seq_len(100), y = y, index = idx)
+
+```
+
+```{r}
+sim%>%
+  autoplot(y)
+
+```
+
+```{r}
+for(i in 2:100)
+  y[i] <- 0*y[i-1] + e[i]
+
+tsibble(idx = seq_len(100),y=y, index =idx)%>%
+  autoplot(y)
+
+```
+
+```{r}
+for(i in 2:100)
+  y[i] <- 1*y[i-1] + e[i]
+
+tsibble(idx = seq_len(100),y=y, index =idx)%>%
+  autoplot(y)
+
+```
+
+```{r}
+for(i in 2:100)
+  y[i] <- e[i] + 0.6 *e[i-1]
+
+sim2 <- tsibble(idx = seq_len(100),y=y,index=idx)%>%
+  autoplot(y)
+
+```
+
+```{r}
+sim2%>%
+  autoplot(y)
+
+```
+
+```{r}
+for(i in 2:100)
+  y[i] <- e[i] + 1 *e[i-1]
+
+tsibble(idx = seq_len(100),y=y,index=idx)%>%
+  autoplot(y)
+```
+
+```{r}
+for(i in 2:100)
+  y[i] <- e[i] + 0 *e[i-1]
+
+tsibble(idx = seq_len(100),y=y,index=idx)%>%
+  autoplot(y)
+
+```
+
+```{r}
+
+for(i in 2:100)
+  y[i] <- e[i] + 0.6 *e[i-1]+0.6*y[i-1]
+
+arima1<- tsibble(idx = seq_len(100),y=y,index = idx)
+```
+
+```{r}
+for(i in 2:100)
+  y[i] <- e[i]-0.8 *e[i-1]+0.3*y[i-1]
+
+arima2<- tsibble(idx = seq_len(100),y=y,index = idx)
+
+```
+
+```{r}
+arima1%>%
+  gg_tsdisplay(y)
+
+```
+
+```{r}
+arima2%>%
+  gg_tsdisplay(y)
+
+```
+#Chapter 9 Question 7
+```{r}
+arima.fc <- aus_airpassengers %>%
+  filter(Year <2012) %>%
+  model(ARIMA(Passengers))
+
+arima.fc %>%
+  forecast(h=10)%>%
+  autoplot(aus_airpassengers)
+
+```
+
+```{r}
+arima.fc %>%
+  gg_tsresiduals()
+
+```
+```{block, type = "written answer"}
+
+Byt = yt - 1 
+
+```
+
+
+
+```{r}
+arima.fc2<-aus_airpassengers%>%
+  filter(Year <2012)%>%
+  model(ARIMA(Passengers ~pdq(0,1,0)))
+
+arima.fc2%>%
+  forecast(h=10)%>%
+  autoplot(aus_airpassengers)
+
+
+
+
+```
+
+```{r}
+arima.fc2%>%
+  gg_tsresiduals()
+
+```
+
+
+```{r}
+
+arima.fc3<-aus_airpassengers%>%
+  filter(Year <2012)%>%
+  model(ARIMA(Passengers ~pdq(2,1,2)))
+
+arima.fc3%>%
+  forecast(h=10)%>%
+  autoplot(aus_airpassengers)
+
+
+```
+
+```{r}
+arima.fc3%>%
+  gg_tsresiduals()
+
+```
+
+```{r}
+arima.fc4<-aus_airpassengers%>%
+  filter(Year <2012)%>%
+  model(ARIMA(Passengers ~ 0 + pdq(2,1,2)))
+
+arima.fc3%>%
+  forecast(h=10)%>%
+  autoplot(aus_airpassengers)
+
+```
+
+```{r}
+
+arima.fc5<- aus_airpassengers%>%
+  filter(Year<2012)%>%
+  model(ARIMA(Passengers ~1 +pdq(0,2,1)))
+
+arima.fc5%>%
+  forecast(h =10)%>%
+  autoplot(aus_airpassengers)
+             
+
+```
+
+```{r}
+arima.fc5%>%
+  gg_tsresiduals()
+
+```
+
+#Chapter 9 Question 8
+```{r}
+global_economy%>%
+  filter(Code == "USA")%>%
+  gg_tsdisplay(GDP, plot_type = 'partial')
+
+```
+
+```{r}
+usa.arima <- global_economy%>%
+  filter(Code == "USA")%>%
+  model(ARIMA(box_cox(GDP, lambda)))
+
+usa.arima
+```
+
+```{r}
+
+global_economy%>%
+  filter(Code == "USA")%>%
+  gg_tsdisplay(box_cox(GDP,lambda), plot_type = 'partial')
+
+```
+
+```{r}
+global_economy%>%
+  filter(Code == "USA")%>%
+  features(box_cox(GDP, lambda),unitroot_ndiffs)
+
+```
+
+```{r}
+usa.models <- global_economy %>%
+  filter(Code == "USA") %>%
+  model(arima110 = ARIMA(box_cox(GDP,lambda) ~ pdq(1,1,0)),
+        arima210 = ARIMA(box_cox(GDP,lambda) ~ pdq(2,1,0)),
+        arima111 = ARIMA(box_cox(GDP,lambda) ~ pdq(1,1,1)))
+
+glance(usa.models)%>%
+  arrange(AICc)%>%
+  dplyr::select(.model:BIC)
+
+```
+```{block, type = "written answer"}
+
+Arimia 111 had the lowest AIC and is the best model.
+
+```
+
+
+```{r}
+
+usa.models%>%
+  dplyr::select(arima111)%>%
+  gg_tsresiduals()
+
+```
+
+```{r}
+usa.models%>%
+  forecast(h=10)%>%
+  filter(.model == 'arima111')%>%
+  autoplot(global_economy)
+
+```
+
+```{r}
+usa.ets <- global_economy%>%
+  filter(Code == "USA")%>%
+  model(ETS(GDP))
+
+```
+
+```{r}
+
+usa.ets%>%
+  forecast(h=10)%>%
+  autoplot(global_economy)
+
+```
+#Chapter 9 Question 9
+```{r}
+aus_arrivals%>%
+  filter(Origin == "Japan")%>%
+  autoplot(Arrivals)
+
+```
+
+```{r}
+aus_arrivals%>%
+  filter(Origin == "Japan")%>%
+  gg_tsdisplay(difference(box_cox(Arrivals, lambda)),plot_type = 'partial')
+
+```
+
+```{block, type = "written answer"}
+
+The ACF graph now indicates that there is some seasonality to the data. THE PACF graph tells us we have correlations for the first few lags, but the significance decreases over time. Based on the new plots, one of the ARIMA models might be effective in forecasting the data. 
+
+```
+
+```{r}
+japan.ets <- aus_arrivals%>%
+  filter(Origin == "Japan")%>%
+  model(ETS(Arrivals))
+
+japan.ets%>%
+  forecast(h=10)%>%
+  autoplot(aus_arrivals)
+
+```
+```{r}
+
+glance(japan.ets)%>%
+  arrange(AICc)%>%
+  dplyr::select(.model:BIC)
+```
+
+
+
+
+```{block, type = "written answer"}
+
+The Arima model does an effective job of forecasting arrivals from Japan. 
+
+```
+
+#Chapter 9 Question 10
+```{r}
+us_employment%>%
+  filter(Title == "Total Private")%>%
+  autoplot(Employed)
+
+```
+
+```{r}
+stl.employ<- us_employment%>%
+  filter(Title == "Total Private")%>%
+  model(STL(Employed))%>%
+  components()
+
+stl.employ%>%
+  autoplot(Employed)
+
+```
+```{block, type = "written answer"}
+
+The data needs transforming because of the increase in seasonality variability.
+
+```
+
+```{r}
+private <- us_employment%>%
+  filter(Title == "Total Private")
+
+lambda <- private%>%
+  features(Employed, features = guerrero)%>%
+  pull(lambda_guerrero)
+
+private.bc <- private %>%
+  model(ETSBoxCox = ETS(box_cox(Employed,lambda)))
+
+accuracy(private.bc)
+```
+
+```{r}
+private%>%
+  gg_tsdisplay(difference(box_cox(Employed, lambda)),plot_type = 'partial')
+
+```
+
+```{r}
+private.arima<-private %>%
+  model(arima110 = ARIMA(box_cox(Employed,lambda) ~ pdq(1,1,0)),
+        arima210 = ARIMA(box_cox(Employed,lambda) ~ pdq(2,1,0)),
+        arima111 = ARIMA(box_cox(Employed,lambda) ~ pdq(1,1,1)))
+
+glance(private.arima)%>%
+  arrange(AICc)%>%
+  dplyr::select(.model:BIC)
+
+```
+```{block, type = "written answer"}
+
+The arima 110 performs best based on AIC.
+
+```
+
+```{r}
+private.arima110<-private %>%
+  model(arima110 = ARIMA(box_cox(Employed,lambda) ~ pdq(1,1,0)))
+
+checkresiduals(private.arima110)
+
+```
+```{r}
+
+private.arima110%>%
+  forecast(h= "3 years")%>%
+  autoplot(private)
+```
+#Chapter 9 Question 11
+```{r}
+aus_production
+beer<- aus_production%>%
+  dplyr::select(Quarter, Beer)
+  
+autoplot(beer)
+
+```
+
+```{r}
+beer%>%
+  gg_tsdisplay(difference(box_cox(Beer, lambda)),plot_type = 'partial')
+
+```
+
+```{r}
+
+beer.arima<-beer %>%
+  model(arima110 = ARIMA(box_cox(Beer,lambda) ~ pdq(1,1,0)),
+        arima210 = ARIMA(box_cox(Beer,lambda) ~ pdq(2,1,0)),
+        arima111 = ARIMA(box_cox(Beer,lambda) ~ pdq(1,1,1)))
+
+glance(beer.arima)%>%
+  arrange(AICc)%>%
+  dplyr::select(.model:BIC)
+```
+
+```{r}
+beer.arima111 <- beer %>%
+  model(arima111 = ARIMA(box_cox(Beer,lambda) ~ pdq(1,1,1)))
+
+beer.arima111%>%
+  forecast(h = "2 years")%>%
+  autoplot(beer)
+
+```
+
+```{r}
+beer.ets <- beer%>%
+  model(ETS(Beer))
+
+beer.ets%>%
+  forecast(h= "2 years")%>%
+  autoplot(beer)
+```
+#Chapter 9 Question 12
+
+```{r}
+beer.stl<- beer%>%
+  model(STL(Beer))%>%
+  components()
+
+autoplot(beer.stl)
+
+```
+
+#Chapter 9 Question 13
+
+```{r}
+
+snowy<- tourism%>%
+  dplyr::select(Quarter, Trips)%>%
+  filter(Region == "Snowy Mountains")
+
+snowy.arima <- snowy%>%
+  model(ARIMA(Trips))
+
+melbourne <- tourism%>%
+  dplyr::select(Quarter, Trips)%>%
+  filter(Region == "Melbourne")
+
+melbourne.arima <- melbourne%>%
+  model(ARIMA(Trips))
+
+
+```
+
+```{r}
+snowy.fc <- snowy.arima%>%
+  forecast(h = 10)
+
+snowy.fc
+
+```
+
+```{r}
+melbourne.fc <- melbourne.arima%>%
+  forecast(h=10)
+
+melbourne.fc
+
+```
+
+Chapter 9 QUestion 14
+```{r}
+myts.arima<-myseries %>%
+  model(ARIMA(Turnover))
+
+myts.arima%>%
+  forecast(h=10)%>%
+  autoplot(myseries)
+
+```
+#Chapter 9 Question 15
+```{r}
+hare <- pelt%>%
+  dplyr::select(Year,Hare)
+
+autoplot(hare)
+```
+
+```{r}
+hare.arima<- hare%>%
+  model(ARIMA(Hare))
+hare.arima%>%
+  gg_tsresiduals()
+
+
+```
+```{block, type = "written answer"}
+
+The acf shows that there is no real seasonality to the data.
+
+```
+
+
+#Chapter 9 Question 16
+```{r}
+global_economy
+swiss.pop<- global_economy%>%
+  dplyr::select(Country, Population)%>%
+  filter(Country == "Switzerland")
+ 
+
+swiss.plot <- global_economy%>%
+  dplyr::select(Country, Population)%>%
+  filter(Country == "Switzerland")%>%
+  autoplot(swiss.pop)
+
+swiss.plot
+```
+
+
+```{r}
+
+swiss.arima<- swiss.pop%>%
+  model(ARIMA(Population))
+
+hare.arima%>%
+  gg_tsresiduals()
+
+```
+```{block, type = "written answer"}
+
+It looks like this ARIMA model does a good job predicting the seasonality of the data, while also accounting for the random spikes.
+
+```
+
+
