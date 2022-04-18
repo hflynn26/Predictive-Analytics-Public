@@ -1,0 +1,887 @@
+---
+title: "Predictive Analytics HW 1"
+author: "Harrison Flynn"
+date: "3/25/2022"
+output:
+  html_document: default
+  word_document: default
+  pdf_document: default
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+## R Markdown
+
+This is an R Markdown document. Markdown is a simple formatting syntax for authoring HTML, PDF, and MS Word documents. For more details on using R Markdown see <http://rmarkdown.rstudio.com>.
+
+When you click the **Knit** button a document will be generated that includes both content as well as the output of any embedded R code chunks within the document. You can embed an R code chunk like this:
+
+```{r cars}
+summary(cars)
+```
+
+## Including Plots
+
+You can also embed plots, for example:
+
+```{r pressure, echo=FALSE}
+plot(pressure)
+```
+
+Note that the `echo = FALSE` parameter was added to the code chunk to prevent printing of the R code that generated the plot.
+
+
+library(tidyverse)
+library(dplyr)
+library(fpp3)
+library(tsibble)
+library(fable)
+library(globals)
+
+install.packages('data.table')
+library(data.table)
+
+library(ggplot2)
+
+install.packages('knitr')
+
+require(dplyr)
+
+
+
+
+#Chapter 3 Question 1
+```{r}
+
+44
+
+```
+
+```{r}
+
+max_gdp <- global_economy %>%
+              mutate(sum = GDP/Population)
+grouped <- setkey(setDT(max_gdp), Country)[,list(sum=sum(sum)), by=list(Country)]
+max_value <- grouped[which.max(grouped$sum),]
+max_value
+
+```
+
+```{r}
+
+global_economy %>%
+  tsibble(key = Code, index = Year)%>%
+  filter(Country=="Luxembourg") %>%
+  autoplot(GDP/Population)
+
+```
+```{block, type = 'written answer}
+
+Luxemborg had the highest GDP per capita in the year referenced. Since it began reporting GDP in 1960, Luxembourg has always had one of the highest GDP per capita's in the world. They experienced slow growth between 1960 and 1980 and then their GDP grew exponentially between 1983 and 1995 and then again between 2001 and 2008.
+
+```
+
+#Chapter 3 Question 2
+
+```{r}
+
+global_economy %>%
+  filter(Country == "United States") %>%
+  autoplot(GDP)+
+  labs(title = "United States GDP", 
+       x = "Year",
+       y = "GDP")
+
+```
+
+```{r}
+
+aus_livestock %>%
+  filter(Animal == "Bulls, bullocks and steers",
+         State == "Victoria")%>%
+  autoplot(Count)+
+  labs(title = "Slaughter of Victorian “Bulls, bullocks and steers”",
+       y = "Total Slaughter",
+       x = "Month")
+
+```
+
+```{r}
+
+vic_elec %>%
+  autoplot(Demand)+
+  labs(title = "Victorian Electricity Demand",
+       x = "Year",
+       y = "Demand")+
+  geom_line(col = "green")
+
+```
+
+```{r}
+
+aus_production %>%
+  autoplot(Gas)+
+  labs(title = "Gas production",
+       x = "Quarter",
+       y = "Total Gas Produced")
+
+```
+
+#Chapter 3 Question 3
+
+```{r}
+
+canadian_gas %>%
+  autoplot(Volume)+
+  labs(title = "Canadian Gas Production",
+       x = "Month",
+       y = "Gas Production (billions of meters cubed)")
+
+```
+
+```{r}
+
+lambda <- canadian_gas %>%
+                  features(Volume, features = guerrero) %>%
+                  pull(lambda_guerrero)
+canadian_gas %>%
+  autoplot(box_cox(Volume, lambda))+
+  labs(title = "Box Cox Transformation of Canadian Gas Production with lambda = 0.12 ",
+       y = "",
+       x = "Year",
+         round(lambda,2))
+
+
+```
+
+```{block, type = 'written answer}
+
+The monthly plot of Canadian Gas production shows that between 1960 and 1978, as well as between 1994 and 2005 there was relatively low seasonality in gas production. Between 1978 and 1994 there was significantly more seasonality in gas production. Because of this inconsistency in seasonality, box cox would most likely be ineffective. 
+
+```
+
+#Chapter 3 Question 4
+
+```{r}
+
+set.seed(12345678)
+myseries <- aus_retail %>%
+  filter(`Series ID` == sample(aus_retail$`Series ID`,1))
+
+myseries %>%
+  autoplot(Turnover)+
+  labs(title = "Australian Retail Trade Turnover",
+       x = "Month")
+
+```
+
+```{r}
+
+lambda <- myseries %>%
+                  features(Turnover, features = guerrero) %>%
+                  pull(lambda_guerrero)
+
+myseries %>%
+  autoplot(box_cox(Turnover, lambda))+
+  labs(title =
+         "Box Cox Transformation of Australian Retail Trade Turnover withlambda" ,
+         round(lambda,2))
+
+```
+
+```{block, type = 'written answer'}
+
+The seasonlity of the retail changes is not consistent, but the seasonality itself does increase with time.
+
+```
+
+#Chapter 3 Question 5
+
+```{r}
+
+lambda <- aus_production %>%
+                   features(Tobacco, features = guerrero) %>%
+                   pull(lambda_guerrero)
+aus_production %>%
+  autoplot(box_cox(Tobacco, lambda)) +
+  labs(y = "",
+       x = "Month",
+       title ="Transformed gas production with lambda",
+         round(lambda,2))
+
+```
+
+```{r}
+
+lambda <- ansett %>%
+                 filter(Class == "Economy",
+                        Airports == "MEL-SYD")%>%
+                 features(Passengers, features = guerrero) %>%
+                 pull(lambda_guerrero)
+ansett %>%
+  filter(Class == "Economy",
+         Airports == "MEL-SYD")%>%
+  mutate(Passengers = Passengers/1000) %>%
+  autoplot(box_cox(Passengers, lambda = lambda)) +
+  labs(y = "Passengers (Thousands)",
+       x = "Week"
+       title = "Transformed Ansett Airlines Economy Class with lambda ",
+       subtitle = "Melbourne-Sydney",
+         round(lambda,2))
+       
+
+```
+
+```{r}
+
+lambda <- pedestrian %>%
+                filter(Sensor == "Southern Cross Station") %>%
+                 features(Count, features = guerrero) %>%
+                 pull(lambda_guerrero)
+pedestrian %>%
+  filter(Sensor == "Southern Cross Station") %>%
+  autoplot(box_cox(Count,lambda))+
+  labs(y = "",
+       x = "",
+       title = "Transformed Pedestrian Counts at Southern Cross Station with lambda ",
+         round(lambda,2))
+
+```
+
+#Chapter 3 Question 6
+
+```{block, type = 'written answer'}
+
+3x5 MA = 1/15(Y1)+ 2/15(Y2)+3/15(Y3)+3/15(Y4)+3/15(Y5)+2/15(Y6)+1/15(Y7)
+Weights = (0.067, 0.133, 0.2, 0.2, 0.2, 0.133, 0.067)
+
+```
+
+#Chapter 3 Question 7
+
+```{r}
+
+gas <- tail(aus_production, 5*4) %>% select(Gas)
+
+gas %>%
+  autoplot()+
+  labs(title = "Last Five Years Gas Data",
+       x="")
+
+```
+
+```{block, type = 'written answer'}
+
+The graphs seems to have yearly seasonality with a trend that has increased every year over the past 5 years. 
+
+```
+
+```{r}
+
+gas %>%
+  model(classical_decomposition(Gas,type = "multiplicative")) %>%
+  components() %>%
+  autoplot() + 
+  ggtitle("Last Five Years Gas Data")
+
+```
+
+```{block, type = 'written answer'}
+
+The mulitplicative decomposition does support the graph from the previous section. It also indicates yearly seasonality and an upward trend in gas production. 
+
+```
+
+```{r}
+
+gas %>%
+  model(classical_decomposition(Gas,type = "multiplicative")) %>%
+  components() %>%
+  ggplot(aes(x = Quarter)) +
+  geom_line(aes(y = Gas, colour = "Data")) +
+  geom_line(aes(y = season_adjust,
+                colour = "Seasonally Adjusted")) +
+  geom_line(aes(y = trend, colour = "Trend")) +
+  labs(y = "",
+       x = "",
+       title = "Last Five Years Gas Data")
+
+```
+
+```{r}
+
+gas.outlier <- gas
+gas.outlier$Gas[10] <- gas.outlier$Gas[10]+300
+
+gas.outlier %>%
+  model(classical_decomposition(Gas,type = "multiplicative")) %>%
+  components() %>%
+  autoplot() + 
+  ggtitle("Last Five Years Gas Data wirh Outlier")
+
+```
+
+```{r}
+
+gas.outlier <- gas
+gas.outlier$Gas[10] <- gas.outlier$Gas[10]+300
+
+gas.outlier %>%
+  model(classical_decomposition(Gas,type = "multiplicative")) %>%
+  components() %>%
+  ggplot(aes(x = Quarter)) +
+  geom_line(aes(y = Gas, colour = "Data")) +
+  geom_line(aes(y = season_adjust,
+                colour = "Seasonally Adjusted")) +
+  geom_line(aes(y = trend, colour = "Trend")) +
+  labs(y = "",
+       x = "",
+       title = "Last Five Years Gas Data with Outlier ")
+
+```
+
+
+```{block, type = 'written answer'}
+
+Adding the outlier created a pretty significant increase in the trend and randomness of the data. It seems to have had little to no effect on the seasonality of the data. 
+
+```
+
+```{r}
+
+gas.outlier <- gas
+gas.outlier$Gas[20] <- gas.outlier$Gas[10]+300
+
+gas.outlier %>%
+  model(classical_decomposition(Gas,type = "multiplicative")) %>%
+  components() %>%
+  ggplot(aes(x = Quarter)) +
+  geom_line(aes(y = Gas, colour = "Data")) +
+  geom_line(aes(y = season_adjust,
+                colour = "Seasonally Adjusted")) +
+  geom_line(aes(y = trend, colour = "Trend")) +
+  labs(y = "",
+       x = "",
+       title = "Last Five Years Gas Data with Outlier towards the End ")
+
+```
+
+```{r}
+
+gas.outlier <- gas
+gas.outlier$Gas[20] <- gas.outlier$Gas[10]+300
+
+gas.outlier %>%
+  model(classical_decomposition(Gas,type = "multiplicative")) %>%
+  components() %>%
+  autoplot() + 
+  ggtitle("Last Five Years Gas Data with Outlier towards the End")
+
+```
+
+```{block, type = 'written answer'}
+
+Seasonolity still has little to no change with the outlier at the end. The trend looks better because although significant, the data continues to increase over time.
+
+```
+
+
+#Chapter 3 Question 8
+
+```{r}
+
+myseries %>%
+  model(classical_decomposition(Turnover,type = "multiplicative")) %>%
+  components() %>%
+  autoplot() + 
+  ggtitle("Multiplicative decomposition of Retail Time Series Data")
+
+```
+
+install.packages("seasonal")
+
+library(seasonal)
+
+
+
+```{r}
+
+x11.decomp <- myseries %>%
+  model(x11 = X_13ARIMA_SEATS(Turnover ~ x11())) %>%
+  components()
+
+  autoplot(x11.decomp)+
+  labs(title = "X-11 Decomposition of Retail Time Series Data",
+       x = "")
+
+```
+
+```{block, type = 'written answer'}
+
+Both decompositions are very similar, but the X-11 decomposition seems to show that there is less randomness/irregulairty.
+
+```
+
+#Chapter 3 Question 9
+
+```{block, type = 'written answer'}
+
+It seems that between 1990 and 1995, the growth in the  number of persons in
+the civilian labor force slowed significantly. This lead to a slow in the growth of he trend, as well as a substanial decrease in the irregularity of the data. The seasonality seems to decrease over time. Additionally, the recession of 1991-1992 is clearly visible just by looking at the slow growth in the value, trend, and irregularity of the decomposition. 
+
+```
+
+#Chapter 3 Question 10
+
+```{r}
+
+canadian_gas %>%
+  autoplot(Volume)+
+  labs(title = "Monthly Canadian Gas Production",
+       y = "Billions of Cubic Meters",
+       x = "")
+
+```
+
+```{r}
+
+canadian_gas %>%
+  gg_subseries(Volume)+
+  labs(title = "Monthly Canadian Gas Production",
+       y = "Billions of Cubic Meters",
+       x = "")
+
+```
+
+```{r}
+
+canadian_gas %>%
+  gg_season(Volume)+
+  labs(title = "Monthly Canadian Gas Production",
+       y = "Billions of Cubic Meters",
+       x = "")
+
+```
+
+```{r}
+
+canadian_gas %>%
+  model(
+    STL(Volume ~ trend(window = 20) +
+                   season(window = 10),
+    robust = TRUE)) %>%
+  components() %>%
+  autoplot()+
+  labs(title = "STL decomposition of Canadian Gas Production")
+
+```
+
+```{block, type = 'written answer'}
+
+There is very little seasonality in the decomposition until right before 1980, when it becomes icreasingly seasonal. This continues until bout 1990 and then the seasonality decreases and the seasonal periods become shorter. 
+
+```
+
+
+```{r}
+
+canadian_gas %>%
+ model(
+    STL(Volume ~ trend(window = 20) +
+                   season(window = 10),
+    robust = TRUE)) %>%
+  components() %>%
+  ggplot(aes(x = Month)) +
+  geom_line(aes(y = Volume, colour = "Data")) +
+  geom_line(aes(y = season_adjust,
+                colour = "Seasonally Adjusted")) +
+  geom_line(aes(y = trend, colour = "Trend")) +
+  labs(title = "STL decomposition of Canadian Gas Production")
+
+```
+```{r}
+
+canadian_gas %>%
+  model(seats = X_13ARIMA_SEATS(Volume ~ seats())) %>%
+  components() %>%
+autoplot() +
+  labs(title ="SEATS Decomposition of Canadian Gas Production")
+
+```
+
+```{r}
+
+canadian_gas %>%
+  model(x11 = X_13ARIMA_SEATS(Volume ~ x11())) %>%
+  components() %>%
+  autoplot()+
+  labs(title = "X-11 Decomposition of Canadian Gas Production",
+       x = "")
+
+```
+
+
+```{block, type = 'written answer'}
+
+The trends and seasonalities of both decompositions are both very similar and both decompositions have different seasonality than the original dataset. The SEATS decomposition seems to fit a bit better, as the ireegularity is closer to the original data.
+
+```
+
+#Chapter 7 Question 1
+
+
+```{r}
+
+jan14_vic_elec <- vic_elec %>%
+  filter(yearmonth(Time) == yearmonth("2014 Jan")) %>%
+  index_by(Date = as_date(Time)) %>%
+  summarise(
+    Demand = sum(Demand),
+    Temperature = max(Temperature)
+  )
+
+jan14_vic_elec %>%
+   as.data.frame() %>%
+  ggplot(aes(x=Temperature, y=Demand)) +
+    ylab("Electricity Demand") +
+    xlab("Temperature") +
+    geom_point() +
+    geom_smooth(method="lm", se=FALSE)
+
+```
+
+library(forecast)
+
+
+```{r}
+
+lm <- jan14_vic_elec %>%
+  model(TSLM(Demand~Temperature))%>%
+  report()
+
+```
+
+```{block, type = 'written answer'}
+
+There is definitely a positive relationship between electricity demand the temperature in Victoria, Australia. This might be because as the temperature increases there is an increased demand for cooling devices like fans and air conditioners and therefore the demand for electricity increases. 
+
+```
+
+
+```{r}
+
+lm%>%
+  gg_tsresiduals()
+
+```
+
+```{block, type = 'written answer'}
+
+The time plot shows some significant variation over time and could therefore make the model inaccurate. Additionally, the histogram is skewed to the right, indicating that the model could be inaccurate as well.
+
+```
+
+
+```{r}
+
+jan14_vic_elec %>%
+  model(TSLM(Demand ~ Temperature)) %>%
+  forecast(
+    new_data(jan14_vic_elec, 1) %>%
+      mutate(Temperature = 15)
+  ) %>%
+  autoplot(jan14_vic_elec)
+
+```
+
+```{r}
+
+jan14_vic_elec %>%
+  model(TSLM(Demand ~ Temperature)) %>%
+  forecast(
+    new_data(jan14_vic_elec, 1) %>%
+      mutate(Temperature = 35)
+  ) %>%
+  autoplot(jan14_vic_elec)
+
+```
+
+```{block, type = 'written answer'}
+
+The forecasts seem to accurately predict the demand for electricity, but since there is a limited amount of data it is best to exercise caution when trusting this data.
+
+```
+
+```{r}
+lm <- jan14_vic_elec %>%
+  model(TSLM(Demand~Temperature))
+
+lm.new <- scenarios(
+  "Average increase" = new_data(jan14_vic_elec, 4) %>%
+    mutate(Temperature = mean(jan14_vic_elec$Temperature)),
+  "Extreme increase" = new_data(jan14_vic_elec, 4) %>%
+    mutate(Temperature = 12),
+  names_to = "Scenario"
+)
+
+fcast <- forecast(lm, lm.new)
+
+jan14_vic_elec %>%
+  autoplot(Demand) +
+  autolayer(fcast) +
+  labs(title = "Temperature", 
+       y = "% change",
+       x = "Date")
+```
+
+```{r}
+
+vic_elec %>%
+  as.data.frame() %>%
+  ggplot(aes(x=Temperature, y=Demand)) +
+    ylab("Electricity Demand") +
+    xlab("Temperature") +
+    geom_point()
+
+```
+
+```{block, type = 'written answer'}
+
+It seems like the demand for electricity peaks when it is warmer, but there are also increases in demand when it gets colder. Around 20 degrees celsius is the low demand for electricity, which is about 68 degrees farenheit. The model does seem to fit this trend fairly accurately.
+
+```
+
+#Chapter 7 Question 2
+
+```{r}
+
+autoplot(olympic_running)+
+  labs( x = "Year")
+
+```
+
+```{block, type = "written"}
+
+The plot features the winning times in each Olympic running event from 1890-2016. There is no data for the years World War I and World War II took place and many of the women's events don't have data until the 70s/80s. 
+
+```
+
+
+```{r}
+
+autoplot(olympic_running)+
+  labs( x = "Year")+
+geom_smooth(method="lm",se = FALSE)
+
+```
+
+```{r}
+
+fit_trends <- olympic_running %>%
+  model(linear = TSLM(Time ~ trend()))
+        
+fc_trends <- fit_trends %>% forecast(h = 10)
+
+olympic_running %>%
+  autoplot(Time) +
+  geom_line(data = fitted(fit_trends),
+            aes(y = .fitted, colour = .model)) +
+  autolayer(fc_trends, alpha = 0.5, level = 95) +
+  labs(y = "Time",
+       title = "Winning Times")
+
+```
+
+```{r}
+model <- lm(Time ~ Year, olympic_running)
+
+checkresiduals(model)
+
+```
+
+```{r}
+
+t <- seq(2020,2020, 4)
+forecast(fit_trends, newdata = data.frame(t))
+
+```
+
+
+#Chapter 7 Question 4
+
+```{block, type = 'written answer'}
+
+Because  Beta1 is the elasticity coefficient you can take the inverse of the equation and set it equal to y. This then indicates that for every change in x there is a change in y that is equal to the elasticity coefficient.
+
+```
+
+
+#Chapter 7 Question 5
+
+```{r}
+
+autoplot(souvenirs)
+
+```
+```{block, type = 'written answer'}
+
+Sales in souvenirs seem to be seasonal, with sales spiking towards the end of the year. This is the time of year where many people are buying gifts, so that spike makes sense. 
+
+```
+
+```{block, type = 'written answer'}
+
+Because the seasonality of the data is not consistent and actually has been increasing almost exponentially since the shop opened, log is necessary here. Log takes into account that the progression of the data may not be linear.
+
+```
+
+```{r}
+
+fit_souvenirs <- souvenirs %>%
+  model(TSLM(Sales ~ trend() + season()))
+report(fit_souvenirs)
+
+```
+
+```{r}
+
+augment(fit_souvenirs) %>%
+  ggplot(aes(x = Month)) +
+  geom_line(aes(y = Month, colour = "Data")) +
+  geom_line(aes(y = .fitted, colour = "Fitted")) +
+  scale_colour_manual(
+    values = c(Data = "black", Fitted = "#D55E00")
+  ) +
+  labs(y = "Sales",
+       title = "Souvenir Store Sales") +
+  guides(colour = guide_legend(title = "Series"))
+
+```
+
+```{r}
+
+augment(fit_souvenirs) %>%
+  ggplot(aes(x = Sales, y = .fitted,
+             colour = factor(month(Month)))) +
+  geom_point() +
+  labs(y = "Fitted", x = "Actual values",
+       title = "Souvenir Store Monthly Sales") +
+  geom_abline(intercept = 0, slope = 1) +
+  guides(colour = guide_legend(title = "Month"))
+
+```
+
+```{r}
+
+fit_souvenirs %>%
+  gg_tsresiduals()
+
+```
+
+```{r}
+
+#Not sure how to boxplot the residuals
+fit_souvenirs %>%
+  gg_tsresiduals()+
+  geom_boxplot()
+
+```
+
+```{block, type = 'written answer'}
+
+The coefficients tell us how much each month contributes to the average sales. In this model, the coefficient increases as each month goes on. This matches up with the positive trend of the data.
+
+```
+
+```{r}
+
+ljung_box(fit_souvenirs, alt="two.sided")
+
+```
+
+```{block, type = 'written answer'}
+
+I could not get the Ljung box test to work. I believe it is because I had some issues with the dummy varaible?
+
+
+```
+
+
+```{r}
+
+future_data <- data.frame(
+  dummy_fest = rep(0, 36)
+)
+preds <- forecast(fit_souvenirs, newdata=future_data)
+
+autoplot(preds)
+```
+
+```{block, type = 'written answer'}
+
+It seems like the model does a good job predicting the holiday sales spike and there is a small spike each March. Having more information may provide a more accurate model. For example, knowing what the weather is on certain days may draw more people to the boardwalk and therefore increase sales.
+
+```
+
+#Chapter 7 Question 5
+
+
+```{r}
+
+#Could not figure out how to filter out years after 2004. Solutions I found online kept giving me error messages.
+
+autoplot(us_gasoline)
+
+```
+
+```{r}
+
+fourier_gas <- us_gasoline %>%
+  model(TSLM(Barrels ~ trend() + fourier(K = 2)))
+report(fourier_gas)
+
+```
+```{r}
+
+gg_tsresiduals(fourier_gas)
+
+```
+
+```{r}
+#Also got an error here when doing the ljung box test.
+
+ljung_box(fourier_gas)
+
+```
+
+```{r}
+
+preds <- forecast(fourier_gas)
+
+autoplot(preds)
+
+```
+
+```{block, type = 'written answer'}
+
+The model does show some seasonality yearly, with slight increases in value each year. It seems to be too consistent though, considering how much gas prices tend to fluctuate.
+
+```
+
+#Chapter 7 Question 6
+
+```{r}
+
+global_economy %>%
+  filter(Country == "Afghanistan")%>%
+  ggplot(aes(x = 'Population',
+  y = 'Year'))
+
+```
+
+
+
+
+
