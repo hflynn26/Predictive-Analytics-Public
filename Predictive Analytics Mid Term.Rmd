@@ -1,0 +1,333 @@
+---
+title: "Predictive Analytics Midterm"
+author: "Harrison Flynn"
+date: "4/18/2022"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+## R Markdown
+
+This is an R Markdown document. Markdown is a simple formatting syntax for authoring HTML, PDF, and MS Word documents. For more details on using R Markdown see <http://rmarkdown.rstudio.com>.
+
+When you click the **Knit** button a document will be generated that includes both content as well as the output of any embedded R code chunks within the document. You can embed an R code chunk like this:
+
+```{r cars}
+summary(cars)
+```
+
+## Including Plots
+
+You can also embed plots, for example:
+
+```{r pressure, echo=FALSE}
+plot(pressure)
+```
+
+Note that the `echo = FALSE` parameter was added to the code chunk to prevent printing of the R code that generated the plot.
+
+library(dplyr)
+library(tidyr)
+library(forecast)
+library(ggplot2)
+library(fpp3)
+install.packages('fpp2)
+library(fpp2)
+install.packages('fpp')
+library(fpp)
+library(fma)
+library(readxl)
+library(tsibble)
+library(feasts)
+library(seasonal)
+library(psych)
+library(MASS)
+install.packages('fitdistrplus')
+library(fitdistrplus)
+library(pscl)
+library(boot)
+install.packages('fGarch')
+library(fGarch)
+library(pROC)
+intall.packages('censReg')
+library(censReg)
+install.packages('tscount')
+library(tscount)
+library(randomForest)
+install.packages('mice')
+library(mice)
+library(caret)
+install.packages('tensorflow')
+library(tensorflow)
+install.packages('keras')
+library(keras)
+install.packages('Amelia')
+library(Amelia)
+library(e1071)
+install.packages(xgboost')
+library(xgboost)
+install.packagess('AnalyzeFMRI')
+library(AnalyzeFMRI)
+install.packages('EBImage')
+library(EBImage)
+install.packages('ResourceSelection')
+library(ResourceSelection)
+install.packages('adabag')
+library(adabag)
+install.packages('neuralnet')
+library(neuralnet)
+library(class)
+install.packages('simmer')
+library(simmer)
+install.packages('simmer.plot')
+library(simmer.plot)
+library(parallel)
+library(rugarch)
+library(dplyr)
+library(generics)
+library(ggpubr)
+
+#Load Data
+train <- read.csv("~/Downloads/covid19-global-forecasting-week-5/train.csv")
+test <- read.csv("~/Downloads/covid19-global-forecasting-week-5/test.csv")
+
+```{r}
+#Data Summary
+summary(train)
+```
+
+```{r}
+str(train)
+
+```
+```{r}
+us.cases <- train %>%
+  filter(Country_Region == 'US', Target == 'ConfirmedCases')
+
+us.daily.cases <- us.cases %>%
+  group_by(Date) %>%
+  summarize(value = sum(TargetValue))
+
+rm(us.cases)
+
+us.plot <- ggplot(us.daily.cases,aes(x = Date, y = value, group = 1))+
+  geom_line()+
+  labs( title = "US Daily COVID Cases",
+        subtitle = "1/23/20 - 6/10/20",
+        x = "Date",
+        y = "Number of Cases")+
+  scale_x_discrete(guide = guide_axis(check.overlap = TRUE))
+
+us.plot
+
+
+```
+
+```{r}
+china.cases <- train %>%
+  filter(Country_Region == 'China', Target == 'ConfirmedCases')
+
+china.daily.cases <- china.cases %>%
+  group_by(Date) %>%
+  summarize(value = sum(TargetValue))
+
+rm(china.cases)
+
+china.plot <- ggplot(china.daily.cases,aes(x = Date, y = value, group = 1))+
+  geom_line()+
+  labs( title = "China Daily COVID Cases",
+        subtitle = "1/23/20 - 6/10/20",
+        x = "Date",
+        y = "Number of Cases")+
+  scale_x_discrete(guide = guide_axis(check.overlap = TRUE))
+
+china.plot
+
+```
+```{r}
+india.cases <- train %>%
+  filter(Country_Region == 'India', Target == 'ConfirmedCases')
+
+india.daily.cases <- india.cases %>%
+  group_by(Date) %>%
+  summarize(value = sum(TargetValue))
+
+rm(india.cases)
+
+india.plot <- ggplot(india.daily.cases,aes(x = Date, y = value, group = 1))+
+  geom_line()+
+  labs( title = "India Daily COVID Cases",
+        subtitle = "1/23/20 - 6/10/20",
+        x = "Date",
+        y = "Number of Cases")+
+  scale_x_discrete(guide = guide_axis(check.overlap = TRUE))
+
+india.plot
+
+```
+```{r}
+
+indonesia.cases <- train %>%
+  group_by(Date) %>%
+  summarize(value = sum(TargetValue))
+
+indonesia.plot <- ggplot(indonesia.cases,aes(x = Date, y = value, group = 1))+
+  geom_line()+
+  labs( title = "Indonesia Daily COVID Cases",
+        subtitle = "1/23/20 - 6/10/20",
+        x = "Date",
+        y = "Number of Cases")+
+  scale_x_discrete(guide = guide_axis(check.overlap = TRUE))
+
+indonesia.plot
+
+```
+
+
+
+```{r}
+
+ggarrange(us.plot, china.plot, india.plot, indonesia.plot + rremove("x.text"), 
+          labels = c("A", "B", "C", "D"),
+          ncol = 2, nrow = 2)
+
+```
+
+
+```{r}
+#STL Model for US Cases
+us.cases.ts <- us.daily.cases %>%
+  mutate(Date = as_date(Date))%>%
+  as_tsibble(index = Date)
+
+
+us.cases.ts %>%
+  as_tsibble(index = Date)%>%
+  model(STL(value ~trend(window =7)+
+              season(window = "periodic"),
+            robust = TRUE))%>%
+  components()%>%
+  autoplot()
+
+
+
+
+```
+
+```{r}
+
+us.stl <- us.cases.ts %>%
+  as_tsibble(index = Date)%>%
+  model(STL(value ~trend(window =7)+
+              season(window = "periodic"),
+            robust = TRUE))%>%
+  components()
+
+```
+
+```{r}
+
+us.stl1 <- us.cases.ts %>%
+  model(stlf = decomposition_model(
+    STL(value ~ trend(window = 7), robust = TRUE),
+    NAIVE(season_adjust)
+  ))
+us.stl1 %>%
+  forecast() %>%
+  autoplot(us.cases.ts)+
+  labs(y = "Confirmed Cases",
+       title = "US COVID 19 Confirmed Cases")
+
+```
+
+
+```{r}
+
+us.stl1 %>%
+  gg_tsresiduals()
+
+
+```
+```{r}
+#ETS Model
+ets.us <- us.cases.ts %>%
+  model(ANN = ETS(value ~ error("A") + trend("N") + season("N")),
+        MNN = ETS(value ~ error("M") + trend("N") + season("N")),
+        AAN = ETS(value ~ error("A") + trend("A") + season("N")),
+        MAN = ETS(value ~ error("M") + trend("A") + season("N"))
+        )
+
+accuracy(ets.us)
+
+```
+```{r}
+#ANN Model
+
+ann<- us.cases.ts %>%
+  model(ETS(value ~ error("A") + trend("N") + season("N")))
+
+ann%>%
+  forecast()%>%
+  autoplot(us.cases.ts)
+
+
+```
+```{r}
+
+ann%>%
+  gg_tsresiduals()
+
+```
+```{r}
+#ARIMA Modeling
+us.cases.ts%>%
+  gg_tsdisplay(difference(value), plot_type = 'partial')
+
+
+```
+```{r}
+#Unsure how to use PACF and ACF graphs to set parameters for ARIMA, so stepwise will be used
+
+us.arima <- us.cases.ts%>%
+  model(stepwise = ARIMA(value),
+        search = ARIMA(value, stepwise = FALSE))
+
+glance(us.arima)%>%
+  arrange(AICc)%>%
+  dplyr::select(.model:BIC)
+
+```
+```{r}
+
+us.arima <- us.cases.ts%>%
+  model(stepwise = ARIMA(value))
+
+us.arima%>%
+  forecast()%>%
+  autoplot(us.cases.ts)
+
+```
+```{r}
+
+us.arima %>%
+  gg_tsresiduals()
+
+
+```
+
+```{r}
+#Accuracy
+accuracy(us.arima)
+
+
+```
+
+
+
+
+
+
+
