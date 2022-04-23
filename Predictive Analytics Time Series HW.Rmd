@@ -1,0 +1,293 @@
+---
+title: "Predictive Analytics Time Series HW"
+author: "Harrison Flynn"
+date: "4/23/2022"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+## R Markdown
+
+This is an R Markdown document. Markdown is a simple formatting syntax for authoring HTML, PDF, and MS Word documents. For more details on using R Markdown see <http://rmarkdown.rstudio.com>.
+
+When you click the **Knit** button a document will be generated that includes both content as well as the output of any embedded R code chunks within the document. You can embed an R code chunk like this:
+
+```{r cars}
+summary(cars)
+```
+
+## Including Plots
+
+You can also embed plots, for example:
+
+```{r pressure, echo=FALSE}
+plot(pressure)
+```
+
+Note that the `echo = FALSE` parameter was added to the code chunk to prevent printing of the R code that generated the plot.
+
+library(dplyr)
+library(tidyr)
+library(forecast)
+library(ggplot2)
+library(fpp3)
+install.packages('fpp2)
+library(fpp2)
+install.packages('fpp')
+library(fpp)
+library(fma)
+library(readxl)
+library(tsibble)
+library(feasts)
+library(seasonal)
+library(psych)
+library(MASS)
+install.packages('fitdistrplus')
+library(fitdistrplus)
+library(pscl)
+library(boot)
+install.packages('fGarch')
+library(fGarch)
+library(pROC)
+intall.packages('censReg')
+library(censReg)
+install.packages('tscount')
+library(tscount)
+library(randomForest)
+install.packages('mice')
+library(mice)
+library(caret)
+install.packages('tensorflow')
+library(tensorflow)
+install.packages('keras')
+library(keras)
+install.packages('Amelia')
+library(Amelia)
+library(e1071)
+install.packages(xgboost')
+library(xgboost)
+install.packagess('AnalyzeFMRI')
+library(AnalyzeFMRI)
+install.packages('EBImage')
+library(EBImage)
+install.packages('ResourceSelection')
+library(ResourceSelection)
+install.packages('adabag')
+library(adabag)
+install.packages('neuralnet')
+library(neuralnet)
+library(class)
+install.packages('simmer')
+library(simmer)
+install.packages('simmer.plot')
+library(simmer.plot)
+library(parallel)
+library(rugarch)
+library(dplyr)
+library(generics)
+library(ggpubr)
+
+```{block, type = "written answer"}
+The data used from this assignment is US Weekly Fuel Prices from January 1995-January 2021. I found the data on Kaggle via the following link : https://www.kaggle.com/datasets/mruanova/us-gasoline-and-diesel-retail-prices-19952021
+
+There were many different grades of fuel that one could work with from this dataset, but I decided to work with Weekly U.S. All Grades All Formulations Retail Gasoline Prices (Dollars per Gallon). 
+
+
+
+```
+
+
+```{r}
+#Load Data
+fuel <- read.csv("~/Downloads/PET_PRI_GND_DCUS_NUS_W.csv")
+
+```
+
+```{r}
+#Select weekly prices for all fuel grades
+weekly.prices <- fuel %>%
+  dplyr::select(Date, A1)
+
+```
+
+```{r}
+#Create Time Series
+prices.ts <- weekly.prices %>%
+  mutate(Date = yearweek(Date))%>%
+  as_tsibble(index = Date)
+```
+
+```{r}
+#Plot Weekly Gas Prices
+prices.ts%>%
+  ggplot(aes(Date,A1,group =1))+
+  geom_line()+
+  labs(title = " US Weekly Fuel Prices",
+       subtitle = "January 1995-January 2021",
+       x = "Date",
+       y = "Cost per Gallon")
+  
+```
+```{r}
+#STL Model
+stl.plot <- prices.ts %>%
+  as_tsibble(index = Date)%>%
+  model(STL(A1 ~trend(window =7)+
+              season(window = "periodic"),
+            robust = TRUE))%>%
+  components()%>%
+  autoplot()
+
+stl.plot
+
+
+```
+```{block, type = "written answer"}
+
+The trend line follows the historical data almost identically. It looks like there will be some seasonality in this forecast. 
+
+```
+
+
+
+
+```{r}
+stl <- prices.ts %>%
+  model(stlf = decomposition_model(
+    STL(A1 ~ trend(window = 7), robust = TRUE),
+    NAIVE(season_adjust)
+  ))
+stl %>%
+  forecast() %>%
+  autoplot(prices.ts)+
+  labs(y = "Cost per Gallon",
+       title = "US Weekly Fuel Costs")
+
+```
+```{r}
+#STL Residuals
+stl %>%
+  gg_tsresiduals()
+
+
+```
+```{block, type = "written answer"}
+
+The STL model seems to not be autocorrelated, but after the first few lags it seems closer to being white noise. The residuals appear to be normally distributed.
+
+```
+
+
+
+```{r}
+#ETS Models
+ets <- prices.ts %>%
+  model(ANN = ETS(A1 ~ error("A") + trend("N") + season("N")),
+        MNN = ETS(A1 ~ error("M") + trend("N") + season("N")),
+        AAN = ETS(A1 ~ error("A") + trend("A") + season("N")),
+        MAN = ETS(A1 ~ error("M") + trend("A") + season("N"))
+        )
+
+accuracy(ets)
+
+
+
+```
+```{block, type = "written answer"}
+
+The RMSE for all of the ETS models are relatively low. The ACF for the MAN model is the smallest, so I will use that model to forecast fuel prices. Based on the RMSE, I am not expecting the forecast to be the most accurate one.
+
+```
+
+
+
+```{r}
+#MAN has lowest ACF. Build MAN model.
+man<- prices.ts %>%
+  model(ETS(A1 ~ error("M") + trend("A") + season("N")))
+
+man%>%
+  forecast()%>%
+  autoplot(prices.ts)
+
+
+```
+```{block, type = "written answer"}
+
+As expected, the MAN ETS model did not forecast well. There is a very large interval in the forecasts, with some even going into the negatives. It does appear that the model does anticipate a steady rise in fuel prices over the course of the next few years.
+
+```
+
+
+```{r}
+#Plot residuals
+man %>%
+  gg_tsresiduals()
+
+
+
+```
+```{block, type = "written answer"}
+
+The ACF model indicates that this model could potentially be white noise, but it does have some lags that cross the blue line bounds. THe residuals appear to be normally distributed. 
+
+```
+
+
+
+```{r}
+#Build ARIMA models
+prices.ts%>%
+  gg_tsdisplay(difference(A1), plot_type = 'partial')
+
+
+
+```
+```{r}
+
+arima <- prices.ts%>%
+  model(stepwise = ARIMA(A1),
+        search = ARIMA(A1, stepwise = FALSE))
+
+glance(arima)%>%
+  arrange(AICc)%>%
+  dplyr::select(.model:BIC) 
+
+```
+```{block, type = "written answer"}
+
+I am still not 100% sure how to pick ARIMA parameters using the ACF and PACF graphs, so I decided to create two ARIMA models. One model uses stepwise and the other uses a deep search. The search model had a lower AIC and will be used for forecasting, altough the results don't inspire much confidence that the forecast will be accurate. 
+
+```
+
+```{r}
+#Models are pretty similar, but search one is slightly better due to lower AIC
+arima <- prices.ts%>%
+  model(search = ARIMA(A1, stepwise = FALSE))
+
+arima%>%
+  forecast()%>%
+  autoplot(prices.ts)
+
+
+```
+```{block, type = "written answer"}
+Overall, the STL model seems to be the best by a significant margin. The forecasts for the ETS and Arima model were not inspiring, as there was a wide interval for their projections. While the ACF and residuals of the ETS model both looked promising, the forecast was not very successful. The forecast for the ARIMA model was definitely better than the ETS model, but I was not as confident in the forecast, although there is an arguement for it to being the best model if you compare the ACF plots. The STL model showed some seasonality to fuel prices and the residuals appeared to be normally distributed. 
+
+
+
+```
+
+```{r}
+fuel.fc <- stl%>%
+  forecast()
+
+fuel.fc
+```
+
+
+
+
