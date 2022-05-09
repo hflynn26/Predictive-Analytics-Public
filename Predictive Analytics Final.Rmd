@@ -1,0 +1,282 @@
+---
+title: "Predicitive Analytics Final Project"
+author: "Harrison Flynn"
+date: "5/6/2022"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+## R Markdown
+
+This is an R Markdown document. Markdown is a simple formatting syntax for authoring HTML, PDF, and MS Word documents. For more details on using R Markdown see <http://rmarkdown.rstudio.com>.
+
+When you click the **Knit** button a document will be generated that includes both content as well as the output of any embedded R code chunks within the document. You can embed an R code chunk like this:
+
+```{r cars}
+summary(cars)
+```
+
+## Including Plots
+
+You can also embed plots, for example:
+
+```{r pressure, echo=FALSE}
+plot(pressure)
+```
+
+Note that the `echo = FALSE` parameter was added to the code chunk to prevent printing of the R code that generated the plot.
+
+library('feasts')
+library('seasonal')
+library('tsibble')
+library('tsibbledata')
+library('dplyr')
+library('ggplot2')
+library('forecast')
+library('fable')
+library('fpp3')
+library('sqldf')
+library('psych')
+library('PerformanceAnalytics')
+library('car')
+library('kableExtra')
+library('glmnet')
+library('ISLR')
+library('leaps')
+library('geosphere')
+library('leaflet') 
+library('leaflet.extras') 
+library('maps') 
+
+library('ggpubr')
+
+```{r}
+#Graph Total Daily Restaurant Visitors from AIR
+p1<-air_visit_data %>%
+  group_by(visit_date)%>%
+  mutate(daily_visitors = sum(visitors))%>%
+  ggplot(aes(visit_date,daily_visitors,group = 1))+
+  geom_line()+
+  labs(title = "Air Total Daily Visitors",
+       y = "Total Visitors")+
+  scale_x_discrete(guide = guide_axis(check.overlap = TRUE))
+  
+
+
+
+```
+
+```{r}
+#Graph Daily Total Reservation Visitors from Air
+air_daily_res <- air_reserve %>%
+  mutate(visit_date = date(visit_datetime))
+
+p2<-air_daily_res %>%
+  group_by(visit_date) %>%
+  summarise(daily_visitors = sum(reserve_visitors)) %>%
+  ggplot(aes(visit_date, daily_visitors)) +
+  geom_line() +
+  labs(x = "Air Daily Reservation Visitors")
+
+
+
+```
+
+```{r}
+#Graph Daily Total Reservation Visitors from HPG
+hpg_daily_res <- hpg_reserve %>%
+  mutate(visit_date = date(visit_datetime))
+
+p3 <- hpg_daily_res %>%
+  group_by(visit_date) %>%
+  summarise(daily_visitors = sum(reserve_visitors)) %>%
+  ggplot(aes(visit_date, daily_visitors)) +
+  geom_line() +
+  labs(x = "HPG Daily Reservation Visitors")
+  
+
+```
+
+```{r}
+ggarrange(p1, p2, p3 + rremove("x.text"), 
+          labels = c("A", "B", "C"),
+          ncol = 1, nrow = 3)
+
+
+```
+
+
+
+```{r}
+#Create Interactive Map of AIR Restaurants
+#Credit to Heads or Tails on Kaggle for the code on how to do this
+leaflet(air_store_info) %>%
+  addTiles() %>%
+  addProviderTiles("CartoDB.Positron") %>%
+  addMarkers(~longitude, ~latitude,
+             popup = ~air_store_id, label = ~air_genre_name,
+             clusterOptions = markerClusterOptions())
+
+```
+
+```{r}
+#Interactive Map of HPG Restaurants
+leaflet(hpg_store_info) %>%
+  addTiles() %>%
+  addProviderTiles("CartoDB.Positron") %>%
+  addMarkers(~longitude, ~latitude,
+             popup = ~hpg_store_id, label = ~hpg_genre_name,
+             clusterOptions = markerClusterOptions())
+
+
+```
+
+
+
+```{r}
+
+air_store_info %>%
+  group_by(air_genre_name) %>%
+  count() %>%
+  ggplot(aes(reorder(air_genre_name, n, FUN = min), n, fill = air_genre_name)) +
+  geom_col() +
+  coord_flip() +
+  theme(legend.position = "none") +
+  labs(x = "Cuisine Genre", y = "Number of Air Restaurants")
+
+```
+
+```{r}
+
+hpg_store_info %>%
+  group_by(hpg_genre_name) %>%
+  count() %>%
+  ggplot(aes(reorder(hpg_genre_name, n, FUN = min), n, fill = hpg_genre_name)) +
+  geom_col() +
+  coord_flip() +
+  theme(legend.position = "none") +
+  labs(x = "Cuisine Genre", y = "Number of HPG Restaurants")
+
+```
+
+```{r}
+air_data <- left_join(air_visit_data, air_store_info, by='air_store_id')
+
+air_ts <- air_data%>%
+  filter(air_store_id == "air_ba937bf13d40fb24")%>%
+  mutate(Date = as_date(visit_date))%>%
+  as_tsibble(index = Date)%>%
+  fill_gaps(visitors  = 0)%>%
+  model(ANN = ETS(visitors ~ error("A") + trend("N") + season("N")),
+        MNN = ETS(visitors ~ error("M") + trend("N") + season("N")),
+        AAN = ETS(visitors ~ error("A") + trend("A") + season("N")),
+        MAN = ETS(visitors ~ error("M") + trend("A") + season("N"))
+        )
+
+accuracy(air_ts)
+
+```
+
+```{r}
+air_ts2 <- air_data%>%
+  filter(air_store_id == "air_ba937bf13d40fb24")%>%
+  mutate(Date = as_date(visit_date))%>%
+  as_tsibble(index = Date)%>%
+  fill_gaps(visitors  = 0)
+
+man <- air_data%>%
+  filter(air_store_id == "air_ba937bf13d40fb24")%>%
+  mutate(Date = as_date(visit_date))%>%
+  as_tsibble(index = Date)%>%
+  fill_gaps(visitors  = 0)%>%
+  model(MAN = ETS(visitors ~ error("M") + trend("A") + season("N")))
+
+man%>%
+  forecast()%>%
+  autoplot(air_ts2)
+
+```
+```{r}
+
+man %>%
+  gg_tsresiduals()
+
+```
+
+```{r}
+arima <- air_data%>%
+  filter(air_store_id == "air_ba937bf13d40fb24")%>%
+  mutate(Date = as_date(visit_date))%>%
+  as_tsibble(index = Date)%>%
+  fill_gaps(visitors  = 0)%>%
+  model(stepwise = ARIMA(visitors),
+        search = ARIMA(visitors, stepwise = FALSE))
+
+glance(arima)%>%
+  arrange(AICc)%>%
+  dplyr::select(.model:BIC)
+
+
+
+```
+```{r}
+sw <- air_data%>%
+  filter(air_store_id == "air_ba937bf13d40fb24")%>%
+  mutate(Date = as_date(visit_date))%>%
+  as_tsibble(index = Date)%>%
+  fill_gaps(visitors  = 0)%>%
+  model(stepwise = ARIMA(visitors))
+
+sw%>%
+  forecast()%>%
+  autoplot(air_ts2)
+
+```
+
+```{r}
+
+sw%>%
+  gg_tsresiduals()
+
+```
+
+```{r}
+
+naive <- air_data%>%
+  filter(air_store_id == "air_ba937bf13d40fb24")%>%
+  mutate(Date = as_date(visit_date))%>%
+  as_tsibble(index = Date)%>%
+  fill_gaps(visitors  = 0)%>%
+  model(NAIVE(visitors))
+
+naive%>%
+  forecast()%>%
+  autoplot(air_ts2)
+
+```
+```{r}
+
+naive%>%
+  gg_tsresiduals()
+
+
+```
+
+```{r}
+sw.fc <- sw%>%
+  forecast(h = 39)
+
+sw.fc
+```
+
+```{r}
+sw.fc%>%
+  ggplot(aes(Date,.mean))+
+  geom_line()
+
+```
+
+
